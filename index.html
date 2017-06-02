@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+     body {
+          font-family: Helvetica;
+     }
+     svg {
+          width: 1000px;
+          height: 500px;
+     }
+     h2 {
+          margin-left: 12px;
+     }
+     .play-button {
+          margin-left: 12px;
+          margin-bottom: 15px;
+          font-style: bold;
+          cursor: pointer;
+          color: blue;
+     }
+     .play-button:hover {
+          color: red;
+     }
+     .buttons-container {
+          width: 800px;
+          margin-bottom: 25px;
+     }
+     .button {
+          float: left;
+          margin-left: 12px;
+          font-weight: lighter;
+          color: SaddleBrown;
+          cursor: pointer;
+     }
+     .selected {
+          font-weight: bold;
+          color: black;
+     }
+     .clearfix {
+          clear: both;
+     }
+     .bar {
+          fill: DarkSlateGray;
+     }
+     .bar-label {
+          text-anchor: end;
+     }
+     .axis-label {
+          text-anchor: middle;
+          font-size: 13px;
+     }
+     .x.axis line {
+       fill: none;
+       stroke: #000;
+     }
+     .x.axis text {
+          font-size: 13px;
+     }
+     .axis path {
+          display:none;
+     }
+     .y.axis line {
+          display:none;
+     }
+     .tooltip{
+        font-family: simsun;
+        font-size: 14px;
+        width: 120;
+        height: auto;
+        position: absolute;
+        text-align: center;
+        border-style: solid;
+        border-width: 1px;
+        background-color: white;
+        border-radius: 5px;
+    }
+</style>
+</head>
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+
+    var airline = "American Airlines Inc."
+
+    var button_airlines = ["American Airlines Inc.",
+                           "Delta Air Lines Inc.",
+                           "Southwest Airlines Co.",
+                           "United Air Lines Inc."];
+
+     var margin = {top: 30, right: 0, bottom: 0, left: 170},
+         width = 740 - margin.left - margin.left,
+         height = 400 - margin.top - margin.bottom;
+
+     var body = d3.select("body");
+
+     var x = d3.scale.linear()
+                     .range([0, width]);
+
+     var y = d3.scale.ordinal()
+                    .rangeBands([0, height], 0.1, 0);
+
+     var x_axis = d3.svg.axis()
+                        .scale(x)
+                        .orient("top")
+                        .ticks(10, "%");
+
+     var y_axis = d3.svg.axis()
+                        .scale(y)
+                        .orient("left");
+
+     function keys(d) {
+          return d.year;
+     }
+
+     body.append("h2")
+         .text("The Delay Rate For Top 4 Airlines in U.S.A（2014-2017)");
+
+     var playall = body.append("div")
+                       .attr("class", "play-button")
+                       .text("▶ PLAY");
+
+     var buttons = body.append("div")
+                       .attr("class", "buttons-container")
+                       .selectAll("div")
+                       .data(button_airlines)
+                       .enter()
+                       .append("div")
+                       .text(function(d) { return d; })
+                       .attr("class", function(d) {
+                          if (d == airline)
+                              return "button selected";
+                          else
+                              return "button";
+                        });
+
+     var tooltip = d3.select("body")
+                  	 .append("div")
+                  	 .attr("class","tooltip")
+                  	 .style("opacity",0.0);
+
+     body.append("div")
+         .attr("class", "clearfix")
+
+     d3.csv("airline_delay_causes_new.csv", function(error, data){
+
+          var delay_data = data.filter(function(element) {return element.carrier_name == airline});
+
+          x.domain([0, d3.max(data, function(element) { return element.percent_delay; })]);
+
+          y.domain(delay_data.map(function(element) {return element.year; }));
+
+          var svg = body.append("svg")
+                        .attr("width", width + margin.left + margin.right)
+                        .attr("height", height + margin.top + margin.bottom)
+                        .append("g")
+                        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+          var bars_group = svg.append("g")
+                              .attr("class", "bar");
+
+          var bars = bars_group.selectAll("rect")
+                               .data(delay_data, keys)
+                               .enter()
+                               .append("rect")
+                               .attr("x", 0)
+                               .attr("y", function(d) {return y(d.year)})
+                               .attr("width", function(d) {return x(d.percent_delay)})
+                               .attr("height", y.rangeBand())
+                               .on("mouseover",function(d){
+                                   d3.select(this)
+                                     .attr("fill","NavajoWhite");
+
+                                   tooltip.html(Math.floor(d.percent_delay * 10000) / 100 + "%")
+					                                .style("left", (d3.event.pageX) + "px")
+					                                .style("top", (d3.event.pageY + 20) + "px")
+					                                .style("opacity",1.0);
+			                         })
+			                         .on("mousemove",function(d){
+								                   tooltip.style("left", (d3.event.pageX) + "px")
+						                              .style("top", (d3.event.pageY + 20) + "px");
+			                         })
+                               .on("mouseout",function(d,i){
+                                   d3.select(this)
+                                     .transition()
+                                     .duration(500)
+                                     .attr("fill","DarkSlateGray");
+
+                                   tooltip.style("opacity",0.0);
+                               });
+
+          svg.append("g")
+               .call(x_axis)
+               .attr("class", "x axis")
+
+          svg.append("g")
+               .call(y_axis)
+               .attr("class","y axis")
+
+          buttons.on("click", function(d) {
+               update(d);
+               clearInterval(playInterval);
+          });
+
+          var playInterval;
+
+          playall.on("click", function() {
+               var i = 0;
+
+               playInterval = setInterval(function() {
+                    update(button_airlines[i]);
+
+                    i++;
+                    if (i > button_airlines.length - 1) {
+                        clearInterval(playInterval);
+                    }
+               }, 600);
+          });
+
+          function update(update_airline) {
+
+               d3.select(".selected")
+                 .classed("selected", false);
+
+               buttons.filter(function(d) { return d == update_airline; })
+                      .classed("selected", true)
+
+               delay_data = data.filter(function(element) {
+                                return element.carrier_name == update_airline
+                            });
+
+               bars.data(delay_data, keys)
+                   .transition()
+                   .duration(500)
+                   .ease("linear")
+                   .attr("width", function(d) { return x(d.percent_delay); })
+                   .attr("fill","DarkSlateGray");
+
+          };
+     });
+</script>
+</body>
+</html>
